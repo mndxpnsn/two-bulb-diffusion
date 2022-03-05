@@ -7,6 +7,7 @@
 //
 
 #include <iostream>
+#include <math.h>
 #include <vector>
 
 typedef struct grid_properties {
@@ -17,7 +18,12 @@ typedef struct grid_properties {
 typedef struct flux_bounds {
     double upper_bound;
     double lower_bound;
-} f_bounds;
+} f_bounds_t;
+
+typedef struct mol_frac_results {
+    std::vector<std::vector<double>> mol_frac1;
+    std::vector<std::vector<double>> mol_frac2;
+} mol_frac_res_t;
 
 double ** create_D(int n) {
     double ** D = new double * [n];
@@ -69,7 +75,6 @@ std::vector<double> compute_composition(std::vector<double> mol_frac,
     int n = (int) mol_frac.size();
     std::vector<double> mol_frac_E;
     
-    // Shoot to boundaries
     int num_steps = g_props.L / g_props.dz;
     
     std::vector<double> mol_frac_in = mol_frac;
@@ -107,7 +112,7 @@ void compute_fluxes_rec(std::vector<double> & mol_frac,
                         double ct,
                         int flux_comp,
                         std::vector<double> J_vec_in,
-                        f_bounds * J_vec_bounds,
+                        f_bounds_t * J_vec_bounds,
                         double & min_dist,
                         double * J_vec) {
     
@@ -116,11 +121,11 @@ void compute_fluxes_rec(std::vector<double> & mol_frac,
     double min_J = J_vec_bounds[flux_comp].lower_bound;
     double max_J = J_vec_bounds[flux_comp].upper_bound;
     
-    int nt = 3e1;
+    int nt = 4e1;
         
     double del_loc = (max_J - min_J) / nt;
     
-    // Try all values for J
+    // Try all values for flux vector J
     if(m < n - 1) {
         for(int i = 0; i < nt; ++i) {
             double J_elem = min_J + i * del_loc;
@@ -131,7 +136,7 @@ void compute_fluxes_rec(std::vector<double> & mol_frac,
         }
     }
     
-    // Compute the last flux component
+    // Compute the last flux component of J
     if(m == n - 1) {
         std::vector<double> J_vec_loc = J_vec_in;
         double j_elem_f = 0.0;
@@ -148,18 +153,19 @@ void compute_fluxes_rec(std::vector<double> & mol_frac,
         std::vector<double> mol_frac_E_loc = compute_composition(mol_frac, D, J_vec_in, g_props, ct);
         double err = error(mol_frac_E, mol_frac_E_loc);
         if(err < min_dist) {
-            for(int k = 0; k < n; ++k)
+            for(int k = 0; k < n; ++k) {
                 J_vec[k] = J_vec_in[k];
+            }
             min_dist = err;
         }
     }
 }
 
 double * compute_fluxes(std::vector<double> & mol_frac,
-                                   std::vector<double> & mol_frac_E,
-                                   double ** D,
-                                   g_props_t g_props,
-                                   double ct) {
+                        std::vector<double> & mol_frac_E,
+                        double ** D,
+                        g_props_t g_props,
+                        double ct) {
     
     double min_dist = 3e8;
     int n = (int) mol_frac.size();
@@ -167,32 +173,29 @@ double * compute_fluxes(std::vector<double> & mol_frac,
     double * J_vec = new double[n];
     std::vector<double> J_vec_in;
     
-    f_bounds * J_vec_bounds = new f_bounds[n];
+    f_bounds_t * J_vec_bounds = new f_bounds_t[n];
     
-    // Set the range and max number of iterations
-    double range = 3.5;
+    // Set the range, decrease factor and max number of iterations
+    double range = 1e3;
     double dec_fac = 10.0;
-    int num_iterations = 5;
+    int num_iterations = 6;
     
-    for(int i = 0; i < n; ++i) {
-        J_vec_bounds[i].upper_bound = range;
-        J_vec_bounds[i].lower_bound = -range;
-    }
-    
-    compute_fluxes_rec(mol_frac, mol_frac_E, D, g_props, ct, 0,
-                       J_vec_in, J_vec_bounds, min_dist, J_vec);
-    
+    // Compute fluxes
     int it = 0;
     while(it < num_iterations) {
-        range = range / dec_fac;
         
         for(int i = 0; i < n; ++i) {
             J_vec_bounds[i].upper_bound = J_vec[i] + range;
             J_vec_bounds[i].lower_bound = J_vec[i] - range;
         }
         
+        // Reset min_dist for calculation
+        min_dist = 3e8;
+        
         compute_fluxes_rec(mol_frac, mol_frac_E, D, g_props, ct, 0,
                            J_vec_in, J_vec_bounds, min_dist, J_vec);
+        
+        range = range / dec_fac;
         
         ++it;
     }
@@ -208,32 +211,74 @@ std::vector<double> convert_to_vec(double * J_vec, int n) {
     return J_vec_inp;
 }
 
+mol_frac_res_t compute_fracs(double ** D,
+                             g_props_t g_props,
+                             double ct,
+                             double V,
+                             double d,
+                             double to,
+                             double tf,
+                             std::vector<double> & mol_frac,
+                             std::vector<double> & mol_frac_E) {
+    
+    double A = 3.14 * d * d / 4;
+    int n = (int) mol_frac.size();
+    int nt = 30;
+    double dt = (tf - to) / nt;
+    double t = to;
+    
+    mol_frac_res_t mol_frac_results;
+    
+    while(t < tf) {
+        double * J_vec = compute_fluxes(mol_frac, mol_frac_E, D, g_props, ct);
+
+        for(int i = 0; i < n; ++i) {
+            mol_frac[i] = mol_frac[i] - A * J_vec[i] * dt / (ct * V);
+            mol_frac_E[i] = mol_frac_E[i] + A * J_vec[i] * dt / (ct * V);
+        }
+        
+        mol_frac_results.mol_frac1.push_back(mol_frac);
+        mol_frac_results.mol_frac2.push_back(mol_frac_E);
+        
+        t = t + dt;
+        
+        delete [] J_vec;
+    }
+    
+    return mol_frac_results;
+}
+
 int main(int argc, const char * argv[]) {
     
     // Number of components
-    int num_components = 4;
+    int num_components = 3;
     
     // Bulb1 mol fractions
-    double x10 = 0.2;
-    double x20 = 0.3;
-    double x30 = 0.1;
+    double x10 = 0.0; // H2
+    double x20 = 0.501; // N2
+    double x30 = 1.0 - x10 - x20; // CO2
     
     // Bulb2 mol fractions
-    double x1E = 0.5;
-    double x2E = 0.1;
-    double x3E = 0.2;
+    double x1E = 0.501; // H2
+    double x2E = 0.499; // N2
+    double x3E = 1.0 - x1E - x2E; // CO2
     
     // Diffusivities
-    double D12 = 0.314;
-    double D13 = 0.6;
-    double D14 = 0.21;
-    double D23 = 0.9;
-    double D24 = 0.123;
-    double D34 = 0.81;
+    double D12 = 8.33e-5 * 3600; // units are (m2 / h)
+    double D13 = 6.8e-5 * 3600; // units are (m2 / h)
+    double D23 = 1.68e-5 * 3600; // units are (m2 / h)
     
     // Domain parameters
-    double L = 1.0;
-    double dz = 0.1;
+    double L = 1e-2; // units are (m)
+    double dz = L / 10; // units are (m)
+    
+    // Bulb parameters
+    double V = 5e-4; // Bulb volumes (m3)
+    double d = 2e-3; // Tube diameter (m)
+    
+    // Time parameters
+    double to = 0.0; // Initial time (h)
+    double tf = 10.0; // Final time (h)
     
     // Total input concentration
     double ct = 1.0;
@@ -243,29 +288,21 @@ int main(int argc, const char * argv[]) {
     mol_frac.push_back(x10);
     mol_frac.push_back(x20);
     mol_frac.push_back(x30);
-    mol_frac.push_back(1.0 - x10 - x20 - x30);
     
     std::vector<double> mol_frac_E;
     mol_frac_E.push_back(x1E);
     mol_frac_E.push_back(x2E);
     mol_frac_E.push_back(x3E);
-    mol_frac_E.push_back(1.0 - x1E - x2E - x3E);
     
     double ** D = create_D(num_components);
     
     D[0][1] = D12;
     D[0][2] = D13;
-    D[0][3] = D14;
     D[1][2] = D23;
-    D[1][3] = D24;
-    D[2][3] = D34;
     
     D[1][0] = D12;
     D[2][0] = D13;
-    D[3][0] = D14;
     D[2][1] = D23;
-    D[3][1] = D24;
-    D[3][2] = D34;
     
     g_props_t g_props;
     g_props.L = L;
@@ -276,15 +313,36 @@ int main(int argc, const char * argv[]) {
     
     // Verify computation of fluxes
     std::vector<double> J_vec_inp = convert_to_vec(J_vec, num_components);
-    
+
     std::vector<double> exit_frac_E = compute_composition(mol_frac, D, J_vec_inp, g_props, ct);
-    
+
     // Print results
     for(int i = 0; i < num_components; ++i)
         std::cout << "flux " << i << ": " << J_vec[i] << std::endl;
-    
+
     for(int i = 0; i < num_components; ++i)
-        std::cout << "exit frac " << i << ": " << exit_frac_E[i] << std::endl;
+        std::cout << "bulb1 mole frac " << i << ": " << mol_frac[i] << std::endl;
+
+    for(int i = 0; i < num_components; ++i)
+        std::cout << "bulb2 mole frac " << i << ": " << exit_frac_E[i] << std::endl;
+
+    // Perform simulation of two-bulb experiment
+    mol_frac_res_t mol_frac_res = compute_fracs(D, g_props, ct, V, d, to, tf, mol_frac, mol_frac_E);
+
+    int nt = (int) mol_frac_res.mol_frac1.size();
+    
+    for(int i = 0; i < nt; ++i) {
+        std::cout << "bulb1 mole fracs at t " << i;
+        for(int c = 0; c < num_components; ++c) {
+            std::cout << ", " << mol_frac_res.mol_frac1[i][c];
+        }
+        std::cout << " ";
+        std::cout << "bulb2 mole fracs at t " << i;
+        for(int c = 0; c < num_components; ++c) {
+            std::cout << ", " << mol_frac_res.mol_frac2[i][c];
+        }
+        std::cout << std::endl;
+    }
     
     // Free allocated data
     delete_D(D, num_components);
