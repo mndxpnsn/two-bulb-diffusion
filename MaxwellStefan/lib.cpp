@@ -104,7 +104,7 @@ void compute_fluxes_rec(b_fracs_t b_fracs,
     double max_J = J_vec_bounds[flux_comp].upper_bound;
     
     // Number of guesses per component
-    int ng = 4e1;
+    int ng = NUM_GUESS;
         
     double del_loc = (max_J - min_J) / ng;
     
@@ -148,7 +148,7 @@ double * compute_fluxes(b_fracs_t b_fracs,
                         p_params_t p_params,
                         g_props_t g_props) {
     
-    double min_dist = 3e8;
+    double min_dist = INF;
     int n = (int) b_fracs.mol_frac.size();
     
     double * J_vec = new double[n];
@@ -157,9 +157,9 @@ double * compute_fluxes(b_fracs_t b_fracs,
     f_bounds_t * J_vec_bounds = new f_bounds_t[n];
     
     // Set the range, decrease factor and max number of iterations
-    double range = 1e3;
-    double dec_fac = 10.0;
-    int num_iterations = 6;
+    double range = RANGE;
+    double dec_fac = DEC_FAC;
+    int num_iterations = NUM_SCALE;
     
     for(int i = 0; i < n; ++i) {
         J_vec_bounds[i].upper_bound = range;
@@ -171,7 +171,7 @@ double * compute_fluxes(b_fracs_t b_fracs,
     while(it < num_iterations) {
         
         // Reset min_dist for calculation
-        min_dist = 3e8;
+        min_dist = INF;
         
         compute_fluxes_rec(b_fracs, p_params, g_props, 0,
                            J_vec_in, J_vec_bounds, min_dist, J_vec);
@@ -204,7 +204,7 @@ mol_frac_res_t compute_fracs(p_params_t p_params,
                              b_fracs_t b_fracs) {
     
     // Number of time steps
-    int nt = 40;
+    int nt = NUM_TIME_STEPS;
     
     double A = 3.14 * b_props.d * b_props.d / 4;
     int n = (int) b_fracs.mol_frac.size();
