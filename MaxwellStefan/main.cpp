@@ -180,20 +180,25 @@ double * compute_fluxes(std::vector<double> & mol_frac,
     double dec_fac = 10.0;
     int num_iterations = 6;
     
+    for(int i = 0; i < n; ++i) {
+        J_vec_bounds[i].upper_bound = range;
+        J_vec_bounds[i].lower_bound = -range;
+    }
+    
     // Compute fluxes
     int it = 0;
     while(it < num_iterations) {
-        
-        for(int i = 0; i < n; ++i) {
-            J_vec_bounds[i].upper_bound = J_vec[i] + range;
-            J_vec_bounds[i].lower_bound = J_vec[i] - range;
-        }
         
         // Reset min_dist for calculation
         min_dist = 3e8;
         
         compute_fluxes_rec(mol_frac, mol_frac_E, D, g_props, ct, 0,
                            J_vec_in, J_vec_bounds, min_dist, J_vec);
+        
+        for(int i = 0; i < n; ++i) {
+            J_vec_bounds[i].upper_bound = J_vec[i] + range;
+            J_vec_bounds[i].lower_bound = J_vec[i] - range;
+        }
         
         range = range / dec_fac;
         
@@ -223,7 +228,7 @@ mol_frac_res_t compute_fracs(double ** D,
     
     double A = 3.14 * d * d / 4;
     int n = (int) mol_frac.size();
-    int nt = 30;
+    int nt = 40;
     double dt = (tf - to) / nt;
     double t = to;
     
@@ -231,7 +236,7 @@ mol_frac_res_t compute_fracs(double ** D,
     
     while(t < tf) {
         double * J_vec = compute_fluxes(mol_frac, mol_frac_E, D, g_props, ct);
-
+        
         for(int i = 0; i < n; ++i) {
             mol_frac[i] = mol_frac[i] - A * J_vec[i] * dt / (ct * V);
             mol_frac_E[i] = mol_frac_E[i] + A * J_vec[i] * dt / (ct * V);
