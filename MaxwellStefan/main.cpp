@@ -121,13 +121,14 @@ void compute_fluxes_rec(std::vector<double> & mol_frac,
     double min_J = J_vec_bounds[flux_comp].lower_bound;
     double max_J = J_vec_bounds[flux_comp].upper_bound;
     
-    int nt = 4e1;
+    // Number of guesses per component
+    int ng = 4e1;
         
-    double del_loc = (max_J - min_J) / nt;
+    double del_loc = (max_J - min_J) / ng;
     
     // Try all values for flux vector J
     if(m < n - 1) {
-        for(int i = 0; i < nt; ++i) {
+        for(int i = 0; i < ng; ++i) {
             double J_elem = min_J + i * del_loc;
             std::vector<double> J_vec_loc = J_vec_in;
             J_vec_loc.push_back(J_elem);
@@ -226,9 +227,11 @@ mol_frac_res_t compute_fracs(double ** D,
                              std::vector<double> & mol_frac,
                              std::vector<double> & mol_frac_E) {
     
+    // Number of time steps
+    int nt = 40;
+    
     double A = 3.14 * d * d / 4;
     int n = (int) mol_frac.size();
-    int nt = 40;
     double dt = (tf - to) / nt;
     double t = to;
     
@@ -335,14 +338,15 @@ int main(int argc, const char * argv[]) {
     mol_frac_res_t mol_frac_res = compute_fracs(D, g_props, ct, V, d, to, tf, mol_frac, mol_frac_E);
 
     int nt = (int) mol_frac_res.mol_frac1.size();
+    double dt = (tf - to) / nt;
     
     for(int i = 0; i < nt; ++i) {
-        std::cout << "bulb1 mole fracs at t " << i;
+        std::cout << "bulb1 composition at t " << (i + 1) * dt;
         for(int c = 0; c < num_components; ++c) {
             std::cout << ", " << mol_frac_res.mol_frac1[i][c];
         }
-        std::cout << " ";
-        std::cout << "bulb2 mole fracs at t " << i;
+        std::cout << std::endl;
+        std::cout << "bulb2 composition at t " << (i + 1) * dt;
         for(int c = 0; c < num_components; ++c) {
             std::cout << ", " << mol_frac_res.mol_frac2[i][c];
         }
