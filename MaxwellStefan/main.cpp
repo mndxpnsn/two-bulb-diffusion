@@ -17,12 +17,12 @@ int main(int argc, const char * argv[]) {
     // Number of components
     int num_components = 3;
     
-    // Bulb1 mol fractions
+    // Bulb1 initial mol fractions
     double x10 = 0.0; // H2
     double x20 = 0.501; // N2
     double x30 = 1.0 - x10 - x20; // CO2
     
-    // Bulb2 mol fractions
+    // Bulb2 initial mol fractions
     double x1E = 0.501; // H2
     double x2E = 0.499; // N2
     double x3E = 1.0 - x1E - x2E; // CO2
