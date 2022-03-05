@@ -51,7 +51,7 @@ int main(int argc, const char * argv[]) {
     p_params_t p_params;
     p_params.ct = 1.0;
     
-    // Organize data
+    // Setup input data
     b_fracs_t bulb_mol_fracs;
     bulb_mol_fracs.mol_frac.push_back(x10);
     bulb_mol_fracs.mol_frac.push_back(x20);
