@@ -47,7 +47,7 @@ int main(int argc, const char * argv[]) {
     time_params.to = 0.0; // Initial time (h)
     time_params.tf = 10.0; // Final time (h)
     
-    // Total input concentration
+    // Total concentration
     p_params_t p_params;
     p_params.ct = 1.0;
     
@@ -77,37 +77,14 @@ int main(int argc, const char * argv[]) {
                                                 bulb_props,
                                                 time_params,
                                                 bulb_mol_fracs);
-
-    // Test computation of fluxes
-    double * J_vec = compute_fluxes(bulb_mol_fracs,
-                                    p_params,
-                                    g_props);
-    
-    std::vector<double> J_vec_inp = convert_to_vec(J_vec,
-                                                   num_components);
-
-    std::vector<double> exit_frac_E = compute_composition(bulb_mol_fracs.mol_frac,
-                                                          p_params,
-                                                          J_vec_inp,
-                                                          g_props);
     
     // Print results
-    for(int i = 0; i < num_components; ++i)
-        std::cout << "flux " << i << ": " << J_vec[i] << std::endl;
-
-    for(int i = 0; i < num_components; ++i)
-        std::cout << "bulb1 mole frac " << i << ": " << bulb_mol_fracs.mol_frac[i] << std::endl;
-
-    for(int i = 0; i < num_components; ++i)
-        std::cout << "bulb2 mole frac " << i << ": " << exit_frac_E[i] << std::endl;
-
     print_fractions(mol_frac_res,
                     time_params,
                     num_components);
     
     // Free allocated data
     delete_D(p_params.D, num_components);
-    delete [] J_vec;
     
     return 0;
 }
