@@ -2,7 +2,7 @@
 //  lib.cpp
 //  MaxwellStefan
 //
-//  Created by Derek Harrison on 05/03/2022.
+//  Created by mndx on 05/03/2022.
 //
 
 #include <iostream>
@@ -146,7 +146,8 @@ void compute_fluxes_rec(b_fracs_t b_fracs,
 
 double * compute_fluxes(b_fracs_t b_fracs,
                         p_params_t p_params,
-                        g_props_t g_props) {
+                        g_props_t g_props,
+                        double & error) {
     
     double min_dist = INF;
     int n = (int) b_fracs.mol_frac.size();
@@ -170,9 +171,6 @@ double * compute_fluxes(b_fracs_t b_fracs,
     int it = 0;
     while(it < num_iterations) {
         
-        // Reset min_dist for calculation
-        min_dist = INF;
-        
         compute_fluxes_rec(b_fracs, p_params, g_props, 0,
                            J_vec_in, J_vec_bounds, min_dist, J_vec);
         
@@ -183,8 +181,21 @@ double * compute_fluxes(b_fracs_t b_fracs,
         
         range = range / dec_fac;
         
+        // Reset min_dist for calculation
+        min_dist = INF;
+        
         ++it;
     }
+    
+    error = 0.0;
+    
+    for(int i = 0; i < n; ++i) {
+        double up_bound = J_vec_bounds[i].upper_bound;
+        double low_bound = J_vec_bounds[i].lower_bound;
+        error = error + (up_bound - low_bound) / J_vec[i];
+    }
+    
+    error = error / n;
     
     return J_vec;
 }
@@ -210,11 +221,13 @@ mol_frac_res_t compute_fracs(p_params_t p_params,
     int n = (int) b_fracs.mol_frac.size();
     double dt = (t_params.tf - t_params.to) / nt;
     double t = t_params.to;
+    double err = INF;
     
     mol_frac_res_t mol_frac_results;
     
     while(t < t_params.tf) {
-        double * J_vec = compute_fluxes(b_fracs, p_params, g_props);
+        
+        double * J_vec = compute_fluxes(b_fracs, p_params, g_props, err);
         
         for(int i = 0; i < n; ++i) {
             b_fracs.mol_frac[i] = b_fracs.mol_frac[i] - A * J_vec[i] * dt / (p_params.ct * b_props.V);
@@ -223,8 +236,14 @@ mol_frac_res_t compute_fracs(p_params_t p_params,
         
         mol_frac_results.mol_frac1.push_back(b_fracs.mol_frac);
         mol_frac_results.mol_frac2.push_back(b_fracs.mol_frac_E);
+        mol_frac_results.error.push_back(err);
         
         t = t + dt;
+        
+        std::cout << "t: " << t << ", err: " << err << std::endl;
+        
+        // Reset error
+        err = INF;
         
         delete [] J_vec;
     }
@@ -238,15 +257,21 @@ void print_fractions(mol_frac_res_t mol_frac_res, t_params_t t_params, int n) {
     double dt = (t_params.tf - t_params.to) / nt;
     
     for(int i = 0; i < nt; ++i) {
-        std::cout << "bulb1 composition at t " << (i + 1) * dt;
+        std::cout << "bulb1 composition at t " << (i + 1) * dt + t_params.to;
+        std::cout << ": ";
         for(int c = 0; c < n; ++c) {
-            std::cout << ", " << mol_frac_res.mol_frac1[i][c];
+            std::cout << " " << mol_frac_res.mol_frac1[i][c];
         }
         std::cout << std::endl;
-        std::cout << "bulb2 composition at t " << (i + 1) * dt;
+        
+        std::cout << "bulb2 composition at t " << (i + 1) * dt + t_params.to;
+        std::cout << ": ";
         for(int c = 0; c < n; ++c) {
-            std::cout << ", " << mol_frac_res.mol_frac2[i][c];
+            std::cout << " " << mol_frac_res.mol_frac2[i][c];
         }
         std::cout << std::endl;
+        
+        std::cout << "error at t " << (i + 1) * dt + t_params.to;
+        std::cout << ": " << mol_frac_res.error[i] << std::endl;
     }
 }
