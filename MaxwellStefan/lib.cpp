@@ -6,6 +6,7 @@
 //
 
 #include <iostream>
+#include <math.h>
 #include <vector>
 
 #include "lib.hpp"
@@ -168,6 +169,8 @@ double * compute_fluxes(b_fracs_t b_fracs,
     }
     
     // Compute fluxes
+    error = INF;
+    
     int it = 0;
     while(it < num_iterations) {
         
@@ -181,21 +184,17 @@ double * compute_fluxes(b_fracs_t b_fracs,
         
         range = range / dec_fac;
         
+        // Get error
+        if(min_dist < error)
+            error = min_dist;
+        
         // Reset min_dist for calculation
         min_dist = INF;
         
         ++it;
     }
     
-    error = 0.0;
-    
-    for(int i = 0; i < n; ++i) {
-        double up_bound = J_vec_bounds[i].upper_bound;
-        double low_bound = J_vec_bounds[i].lower_bound;
-        error = error + (up_bound - low_bound) / J_vec[i];
-    }
-    
-    error = error / n;
+    error = sqrtf(error) / n;
     
     return J_vec;
 }
