@@ -8,16 +8,17 @@
 #ifndef user_types_h
 #define user_types_h
 
-const int NUM_TIME_STEPS = 20;
+const int NUM_TIME_STEPS = 10;
 const double INF = 3e8;
 const double RANGE = 1e3;
 const double DEC_FAC = 10;
-const int NUM_SCALE = 8;
+const int NUM_SCALE = 6;
 const int NUM_GUESS = 20;
 
 typedef struct grid_properties {
     double L;
     double dz;
+    int nz;
 } g_props_t;
 
 typedef struct flux_bounds {
@@ -50,5 +51,14 @@ typedef struct bulb_mol_fractions {
     std::vector<double> mol_frac;
     std::vector<double> mol_frac_E;
 } b_fracs_t;
+
+typedef struct experiment_params {
+    b_fracs_t b_fracs;
+    p_params_t p_params;
+    g_props_t g_props;
+} e_params_t;
+
+typedef std::vector<double> vec_d_t;
+typedef std::vector<f_bounds_t> vec_fb_t;
 
 #endif /* user_types_h */

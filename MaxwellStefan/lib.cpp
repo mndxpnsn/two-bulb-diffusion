@@ -6,37 +6,39 @@
 //
 
 #include <iostream>
-#include <math.h>
+#include <stdio.h>
 #include <vector>
 
 #include "lib.hpp"
 #include "user_types.h"
 
+using namespace std;
+
 double ** create_D(int n) {
+
     double ** D = new double * [n];
     
     for(int i = 0; i < n; ++i) {
         D[i] = new double[n];
-        for(int j = 0; j < n; ++j) {
+        for(int j = 0; j < n; ++j)
             D[i][j] = 0.0;
-        }
     }
     
     return D;
 }
 
 void delete_D(double ** D, int n) {
-    for(int i = 0; i < n; ++i) {
+
+    for(int i = 0; i < n; ++i)
         delete [] D[i];
-    }
     
     delete [] D;
 }
 
 double dx_dz(int component,
-             std::vector<double> mol_frac,
+             vec_d_t mol_frac,
              p_params_t p_params,
-             std::vector<double> J_vec) {
+             vec_d_t J_vec) {
     
     int n = (int) mol_frac.size();
     
@@ -52,33 +54,33 @@ double dx_dz(int component,
     return res;
 }
 
-std::vector<double> compute_composition(std::vector<double> mol_frac,
-                                        p_params_t p_params,
-                                        std::vector<double> J_vec,
-                                        g_props_t g_props) {
+vector<double> compute_composition(e_params_t e_params,
+                                   vec_d_t J_vec) {
+
+
+    vec_d_t mol_frac = e_params.b_fracs.mol_frac;
+    p_params_t p_params = e_params.p_params;
+    g_props_t g_props = e_params.g_props;
     
     int n = (int) mol_frac.size();
-    std::vector<double> mol_frac_E;
+    vec_d_t mol_frac_E;
+    vec_d_t mol_frac_in = mol_frac;
     
     int num_steps = g_props.L / g_props.dz;
     
-    std::vector<double> mol_frac_in = mol_frac;
-    
     for(int c = 0; c < n; ++c) {
-        for(int s = 0; s < num_steps; ++s) {
+        for(int s = 0; s < num_steps; ++s)
             mol_frac[c] = -dx_dz(c, mol_frac_in, p_params, J_vec) * g_props.dz + mol_frac[c];
-        }
     }
     
-    for(int c = 0; c < n; ++c) {
+    for(int c = 0; c < n; ++c)
         mol_frac_E.push_back(mol_frac[c]);
-    }
     
     return mol_frac_E;
 }
 
-double error(std::vector<double> mol_frac,
-             std::vector<double> mol_frac_E) {
+double error(vec_d_t mol_frac,
+             vec_d_t mol_frac_E) {
     
     double res = 0.0;
     
@@ -90,19 +92,18 @@ double error(std::vector<double> mol_frac,
     return res;
 }
 
-void compute_fluxes_rec(b_fracs_t b_fracs,
-                        p_params_t p_params,
-                        g_props_t g_props,
-                        int flux_comp,
-                        std::vector<double> J_vec_in,
-                        f_bounds_t * J_vec_bounds,
+void compute_fluxes_rec(e_params_t e_params,
+                        vec_d_t J_vec_in,
+                        vec_fb_t & J_vec_bounds,
                         double & min_dist,
-                        double * J_vec) {
-    
+                        vec_d_t & J_vec) {
+
+    b_fracs_t b_fracs = e_params.b_fracs;
+
     int n = (int) b_fracs.mol_frac.size();
     int m = (int) J_vec_in.size();
-    double min_J = J_vec_bounds[flux_comp].lower_bound;
-    double max_J = J_vec_bounds[flux_comp].upper_bound;
+    double min_J = J_vec_bounds[m].lower_bound;
+    double max_J = J_vec_bounds[m].upper_bound;
     
     // Number of guesses per component
     int ng = NUM_GUESS;
@@ -113,98 +114,93 @@ void compute_fluxes_rec(b_fracs_t b_fracs,
     if(m < n - 1) {
         for(int i = 0; i < ng; ++i) {
             double J_elem = min_J + i * del_loc;
-            std::vector<double> J_vec_loc = J_vec_in;
+            vec_d_t J_vec_loc = J_vec_in;
+
             J_vec_loc.push_back(J_elem);
-            compute_fluxes_rec(b_fracs, p_params, g_props, flux_comp + 1,
-                               J_vec_loc, J_vec_bounds, min_dist, J_vec);
+
+            compute_fluxes_rec(e_params, J_vec_loc, J_vec_bounds, min_dist, J_vec);
         }
     }
     
     // Compute the last flux component of J
     if(m == n - 1) {
-        std::vector<double> J_vec_loc = J_vec_in;
+        vec_d_t J_vec_loc = J_vec_in;
         double j_elem_f = 0.0;
-        for(auto j_elem : J_vec_in) {
+
+        for(auto j_elem : J_vec_in)
             j_elem_f = j_elem_f - j_elem;
-        }
+
         J_vec_loc.push_back(j_elem_f);
-        compute_fluxes_rec(b_fracs, p_params, g_props, flux_comp + 1,
-                           J_vec_loc, J_vec_bounds, min_dist, J_vec);
+
+        compute_fluxes_rec(e_params, J_vec_loc, J_vec_bounds, min_dist, J_vec);
     }
     
     // Compute the minimum flux vector J
     if(m == n) {
-        std::vector<double> mol_frac_E_loc = compute_composition(b_fracs.mol_frac, p_params, J_vec_in, g_props);
+        vec_d_t mol_frac_E_loc = compute_composition(e_params, J_vec_in);
+
         double err = error(b_fracs.mol_frac_E, mol_frac_E_loc);
+
         if(err < min_dist) {
-            for(int k = 0; k < n; ++k) {
+            for(int k = 0; k < n; ++k)
                 J_vec[k] = J_vec_in[k];
-            }
+
             min_dist = err;
         }
     }
 }
 
-double * compute_fluxes(b_fracs_t b_fracs,
-                        p_params_t p_params,
-                        g_props_t g_props,
-                        double & error) {
-    
+std::vector<double> compute_fluxes(b_fracs_t b_fracs,
+                                   p_params_t p_params,
+                                   g_props_t g_props) {
+
     double min_dist = INF;
     int n = (int) b_fracs.mol_frac.size();
     
-    double * J_vec = new double[n];
-    std::vector<double> J_vec_in;
-    
-    f_bounds_t * J_vec_bounds = new f_bounds_t[n];
+    e_params_t e_params;
+    e_params.b_fracs = b_fracs;
+    e_params.p_params = p_params;
+    e_params.g_props = g_props;
+
+    vec_d_t J_vec;
+    vec_d_t J_vec_in;
+    vec_fb_t J_vec_bounds;
     
     // Set the range, decrease factor and max number of iterations
     double range = RANGE;
     double dec_fac = DEC_FAC;
     int num_iterations = NUM_SCALE;
     
+    // Initialize range bounds and flux vector
     for(int i = 0; i < n; ++i) {
-        J_vec_bounds[i].upper_bound = range;
-        J_vec_bounds[i].lower_bound = -range;
+        f_bounds_t f_bounds;
+        f_bounds.upper_bound = range;
+        f_bounds.lower_bound = -range;
+        J_vec_bounds.push_back(f_bounds);
+        J_vec.push_back(0);
     }
     
     // Compute fluxes
-    error = INF;
-    
     int it = 0;
+
     while(it < num_iterations) {
         
-        compute_fluxes_rec(b_fracs, p_params, g_props, 0,
-                           J_vec_in, J_vec_bounds, min_dist, J_vec);
+        // Reset min_dist for calculation
+        min_dist = INF;
         
+        compute_fluxes_rec(e_params, J_vec_in, J_vec_bounds, min_dist, J_vec);
+        
+        range = range / dec_fac;
+
         for(int i = 0; i < n; ++i) {
             J_vec_bounds[i].upper_bound = J_vec[i] + range;
             J_vec_bounds[i].lower_bound = J_vec[i] - range;
         }
         
-        range = range / dec_fac;
-        
-        // Get error
-        if(min_dist < error)
-            error = min_dist;
-        
-        // Reset min_dist for calculation
-        min_dist = INF;
-        
         ++it;
     }
     
-    error = sqrtf(error) / n;
-    
     return J_vec;
-}
-
-std::vector<double> convert_to_vec(double * J_vec, int n) {
-    std::vector<double> J_vec_inp;
-    for(int i = 0; i < n; ++i)
-        J_vec_inp.push_back(J_vec[i]);
-    
-    return J_vec_inp;
 }
 
 mol_frac_res_t compute_fracs(p_params_t p_params,
@@ -220,13 +216,11 @@ mol_frac_res_t compute_fracs(p_params_t p_params,
     int n = (int) b_fracs.mol_frac.size();
     double dt = (t_params.tf - t_params.to) / nt;
     double t = t_params.to;
-    double err = INF;
     
     mol_frac_res_t mol_frac_results;
     
     while(t < t_params.tf) {
-        
-        double * J_vec = compute_fluxes(b_fracs, p_params, g_props, err);
+        vec_d_t J_vec = compute_fluxes(b_fracs, p_params, g_props);
         
         for(int i = 0; i < n; ++i) {
             b_fracs.mol_frac[i] = b_fracs.mol_frac[i] - A * J_vec[i] * dt / (p_params.ct * b_props.V);
@@ -235,42 +229,68 @@ mol_frac_res_t compute_fracs(p_params_t p_params,
         
         mol_frac_results.mol_frac1.push_back(b_fracs.mol_frac);
         mol_frac_results.mol_frac2.push_back(b_fracs.mol_frac_E);
-        mol_frac_results.error.push_back(err);
         
         t = t + dt;
-        
-        std::cout << "t: " << t << ", err: " << err << std::endl;
-        
-        // Reset error
-        err = INF;
-        
-        delete [] J_vec;
     }
     
     return mol_frac_results;
 }
 
-void print_fractions(mol_frac_res_t mol_frac_res, t_params_t t_params, int n) {
+void print_fractions(mol_frac_res_t mol_frac_res,
+                     t_params_t t_params,
+                     int n) {
     
     int nt = (int) mol_frac_res.mol_frac1.size();
     double dt = (t_params.tf - t_params.to) / nt;
     
     for(int i = 0; i < nt; ++i) {
-        std::cout << "bulb1 composition at t " << (i + 1) * dt + t_params.to;
-        std::cout << ": ";
-        for(int c = 0; c < n; ++c) {
-            std::cout << " " << mol_frac_res.mol_frac1[i][c];
-        }
-        std::cout << std::endl;
-        
-        std::cout << "bulb2 composition at t " << (i + 1) * dt + t_params.to;
-        std::cout << ": ";
-        for(int c = 0; c < n; ++c) {
-            std::cout << " " << mol_frac_res.mol_frac2[i][c];
-        }
-        std::cout << std::endl;
-        
-        std::cout << "error at t " << (i + 1) * dt + t_params.to;
-        std::cout << ": " << mol_frac_res.error[i] << std::endl;
+        cout << "bulb1 composition at t " << (i + 1) * dt;
+
+        for(int c = 0; c < n; ++c)
+            cout << ", " << mol_frac_res.mol_frac1[i][c];
+
+        cout << endl;
+
+        cout << "bulb2 composition at t " << (i + 1) * dt;
+
+        for(int c = 0; c < n; ++c)
+            cout << ", " << mol_frac_res.mol_frac2[i][c];
+
+        cout << endl;
     }
+}
+
+void store_fractions(mol_frac_res_t mol_frac_res, t_params_t t_params, int n) {
+    int nt = (int) mol_frac_res.mol_frac1.size();
+    double dt = (t_params.tf - t_params.to) / nt;
+
+    FILE * file_ptr1 = fopen("results_bulb1.txt", "w");
+    FILE * file_ptr2 = fopen("results_bulb2.txt", "w");
+
+    if(file_ptr1 == nullptr)
+        printf("file1 could not be opened\n");
+
+    if(file_ptr2 == nullptr)
+        printf("file2 could not be opened\n");
+
+    double t = t_params.to;
+
+    for(int i = 0; i < nt; ++i) {
+        
+        t = t + dt;
+        
+        fprintf(file_ptr1, "%f\t", t);
+        fprintf(file_ptr2, "%f\t", t);
+        
+        for(int c = 0; c < n; ++c) {
+            fprintf(file_ptr1, "%f\t", mol_frac_res.mol_frac1[i][c]);
+            fprintf(file_ptr2, "%f\t", mol_frac_res.mol_frac2[i][c]);
+        }
+        
+        fprintf(file_ptr1, "\n");
+        fprintf(file_ptr2, "\n");
+    }
+
+    fclose(file_ptr1);
+    fclose(file_ptr2);
 }

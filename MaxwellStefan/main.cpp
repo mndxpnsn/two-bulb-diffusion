@@ -40,7 +40,8 @@ int main(int argc, const char * argv[]) {
     // Domain parameters
     g_props_t g_props;
     g_props.L = 1e-2; // units are (m)
-    g_props.dz = 1e-2 / 10; // units are (m)
+    g_props.nz = 10; // Number of nodes in z-direction
+    g_props.dz = 1e-2 / g_props.nz; // units are (m)
     
     // Bulb parameters
     b_props_t bulb_props;
